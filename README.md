@@ -1,6 +1,6 @@
 # sympa-auditor
 
-These Python scripts automate the extraction of metadata from a Sympa-based mailing list web interface. It performs web scraping to collect details about available mailing lists—such as list names along with their configurations and compiles them into a structured JSON file.
+These Python scripts automate the extraction of metadata from a Sympa-based mailing list web interface. It performs web scraping to collect details about available mailing lists—such as list names along with their configurations and compiles them into a structured JSON file. The web browser used to web scrape is Chrome.
 
 ## Features
 
@@ -21,5 +21,8 @@ python3 audit.py
 ```
 
 The first time you run the script, it opens the Sympa Web UI homepage, where you'll log in manually. Your session cookies are then saved for reuse in future runs. If there are errors with session cookies, simply delete ```cookies.pkl``` and rerun the script. 
+
+## Caveats
+The USER_AGENT variable set in ```audit.py``` may need to be changed to the appropriate value as the script was developed on a Mac using Chrome.
 
 
