@@ -8,13 +8,14 @@ from selenium.webdriver.common.by import By
 from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
-
+import argparse
+import os
 
 # GLOBAL VARIABLES
-MAILING_LIST_URL = 'https://lists.ncsa.illinois.edu'
+MAILING_LIST_URL = ''
 COOKIES_FILE = 'cookies.pkl'
-OUTPUT_FILE = 'output.json'
-USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36' 
+OUTPUT_FILE = ''
+USER_AGENT = '' 
 
 @dataclass
 class EmailList:
@@ -27,6 +28,24 @@ class EmailList:
     invite: str
     remind: str
     review: str
+
+def get_cookies(url):
+    # Start a Selenium session
+    driver = webdriver.Chrome()
+
+    # Open the login page
+    driver.get(url)
+
+    # Pause to let you log in manually
+    print("Log in manually, then press ENTER here...")
+    input()
+
+    # Save cookies to a file
+    with open(COOKIES_FILE, "wb") as f:
+        pickle.dump(driver.get_cookies(), f)
+
+    print("Cookies saved!")
+    driver.quit()
 
 def connect():
     options = Options()
@@ -48,31 +67,46 @@ def connect():
         cookies = pickle.load(f)
 
     for cookie in cookies:
+        print(cookie)
         copy_cookie = cookie.copy()
         try:
-            copy_cookie.pop('sameSite')
+            # copy_cookie.pop('sameSite')
             driver.add_cookie(copy_cookie)
         except Exception as e:
             print(f"Error adding cookie: {cookie['name']} - {e}")
     return driver
 
-def get_cookies(url):
-    # Start a Selenium session
-    driver = webdriver.Chrome()
+def connect_with_session(sympa_session):
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run in headless mode
+    options.add_argument(f"--user-agent={USER_AGENT}")
+    
+    driver = webdriver.Remote(
+        command_executor='http://selenium:4444/wd/hub',  # Selenium host & port
+        options=options
+    )
 
-    # Open the login page
-    driver.get(url)
+    driver.get(MAILING_LIST_URL)
+    
+    driver.delete_all_cookies()
 
-    # Pause to let you log in manually
-    print("Log in manually, then press ENTER here...")
-    input()
+    cookies = [{
+        'domain': 'lists.ncsa.illinois.edu',
+        'httpOnly': True,
+        'name': 'sympa_session',
+        'path': '/',
+        'sameSite': 'Lax',
+        'secure': True,
+        'value': sympa_session
+    }]
 
-    # Save cookies to a file
-    with open(COOKIES_FILE, "wb") as f:
-        pickle.dump(driver.get_cookies(), f)
-
-    print("Cookies saved!")
-    driver.quit()
+    for cookie in cookies:
+        copy_cookie = cookie.copy()
+        try:
+            driver.add_cookie(copy_cookie)
+        except Exception as e:
+            print(f"Error adding cookie: {cookie['name']} - {e}")
+    return driver
 
 def get_all_lists(driver):
     res = list()
@@ -82,6 +116,9 @@ def get_all_lists(driver):
     element = driver.find_elements('css selector', 'li.listenum > a')
     for item in element:
         res.append(item.text)
+
+    if len(res) != 0:
+        print("Success")
     return res
     
 def get_list_option(driver, option):
@@ -122,9 +159,16 @@ def dump_list_metadata(path, all_list_metadata):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Get symmpa_session")
+    parser.add_argument("--sympa_session", type=str, default='', help="sympa_session for logged in session")
+    args = parser.parse_args()
+    return args
+
 def main():
-    # Connect to lists.ncsa.illinois.edu
-    driver = connect()
+    args = parse_args()
+    
+    driver = connect_with_session(args.sympa_session)
 
     # Get all lists
     all_lists = get_all_lists(driver)
@@ -132,12 +176,17 @@ def main():
     # Get list metadata
     all_list_metadata = list()
     for list_name in all_lists:
-        all_list_metadata.append(get_list_metadata(driver, list_name))
-    
+        all_list_metadata.append(get_list_metadata(driver, list_name))  
+
     # Dumps data to json file
     dump_list_metadata(OUTPUT_FILE, all_list_metadata)
 
     driver.quit()
 
 if __name__ == '__main__':
+    # Loading in Environment variables
+    MAILING_LIST_URL = os.getenv('MAILING_LIST_URL')
+    OUTPUT_FILE = os.getenv('OUTPUT_FILE')
+    USER_AGENT = os.getenv('USER_AGENT')
     main()
+    
