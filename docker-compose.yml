@@ -1,0 +1,15 @@
+services:
+  sympa_auditor:
+    image: phongtran27/sympa-auditor:0.0.1
+    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <COOKIE>"
+    depends_on:
+      - selenium
+    volumes:
+      - sympa_data:/sympa_data
+
+  selenium:
+    image: selenium/standalone-chrome
+    shm_size: '2gb'
+
+volumes:
+  sympa_data:

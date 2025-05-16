@@ -1,6 +1,6 @@
 # sympa-auditor
 
-These Python scripts automate the extraction of metadata from a Sympa-based mailing list web interface. It performs web scraping to collect details about available mailing lists—such as list names along with their configurations and compiles them into a structured JSON file. The web browser used to web scrape is Chrome.
+These Python scripts automate the extraction of metadata from a Sympa-based mailing list web interface. It performs web scraping to collect details about available mailing lists—such as list names along with their configurations and compiles them into a structured JSON file. The web browser used to web scrape is Chrome. Should only be run by listmasters. 
 
 ## Features
 
@@ -10,19 +10,9 @@ These Python scripts automate the extraction of metadata from a Sympa-based mail
 - Designed for administrators needing an overview of Sympa lists
 
 ## Usage 
-Install the depedencies: 
-```
-pip install -r requirements.txt
-```
 
-Run the script:
-```
-python3 audit.py
-```
+#### Retrieve the sympa-session token
+Navigate to https://list.ncsa.illinois.edu and sign in using ```Campus Login```. The Developer Window should be open and on the Network tab. Find the request with ```lists``` name, and record the ```sympa_session``` cookie. 
 
-The first time you run the script, it opens the Sympa Web UI homepage, where you'll log in manually. Your session cookies are then saved for reuse in future runs. If there are errors with session cookies, simply delete ```cookies.pkl``` and rerun the script. 
-
-## Caveats
-The USER_AGENT variable set in ```audit.py``` may need to be changed to the appropriate value as the script was developed on a Mac using Chrome.
-
-
+#### Docker Compose
+It is best to run the sympa-auditor using docker compose with two services: sympa-auditor and selenium. Sympa-auditor relies on selenium to do the web-scraping work. See the `docker-compose.yml` file for a template. Make sure to include the sympa_session cookie.
