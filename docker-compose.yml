@@ -1,11 +1,13 @@
 services:
   sympa_auditor:
-    image: phongtran27/sympa-auditor:0.0.1
-    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <COOKIE>"
+    image: phongtran27/sympa-auditor:0.0.2
+    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN>"
     depends_on:
       - selenium
     volumes:
       - sympa_data:/sympa_data
+    environment:
+      OUTPUT_FILE : '/sympa_data/audit.json'
 
   selenium:
     image: selenium/standalone-chrome
