@@ -1,13 +1,14 @@
 services:
   sympa_auditor:
-    image: phongtran27/sympa-auditor:0.0.2
-    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN>"
+    image: phongtran27/sympa-auditor:0.0.3
+    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN> --categorize"
     depends_on:
       - selenium
     volumes:
       - sympa_data:/sympa_data
     environment:
       OUTPUT_FILE : '/sympa_data/audit.json'
+      CATEGORIZE_FILE : '/sympa_data/categorize_audit.json'
 
   selenium:
     image: selenium/standalone-chrome

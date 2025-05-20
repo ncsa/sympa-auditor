@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import argparse
 import os
+from collections import defaultdict
 
 # GLOBAL VARIABLES
 MAILING_LIST_URL = ''
@@ -151,17 +152,33 @@ def get_list_metadata(driver, list_name):
     )
     return list_info
 
-def dump_list_metadata(path, all_list_metadata):
+def dump_list_metadata(all_list_metadata):
     data = dict()
     for list_entry in all_list_metadata:
         data[list_entry.list_name] = asdict(list_entry)
 
-    with open(path, "w") as f:
+    with open(OUTPUT_FILE, "w") as f:
         json.dump(data, f, indent=2)
+
+def categorize_data():
+
+    with open(OUTPUT_FILE, "r") as f:
+        data = json.load(f)
+
+    res = defaultdict(lambda: defaultdict(list))
+    for list_name, list_entry in data.items():
+        for option, selection in list_entry.items():
+            if option == 'list_name': continue
+
+            res[option][selection].append(list_name)
+
+    with open(CATEGORIZE_FILE, 'w') as f:
+        json.dump(res, f, indent=2)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Get symmpa_session")
-    parser.add_argument("--sympa_session", type=str, default='', help="sympa_session for logged in session")
+    parser.add_argument("--sympa_session", type=str, default='', help="sympa_session cookie for logged in session. Outputs a file with list names and their configurations")
+    parser.add_argument("--categorize", action='store_true', help="Structure list items by their options. Ouputs a file categorize by configurations")
     args = parser.parse_args()
     return args
 
@@ -178,15 +195,21 @@ def main():
     for list_name in all_lists:
         all_list_metadata.append(get_list_metadata(driver, list_name))  
 
+
     # Dumps data to json file
-    dump_list_metadata(OUTPUT_FILE, all_list_metadata)
+    dump_list_metadata(all_list_metadata)
 
     driver.quit()
+
+    if args.categorize:
+        categorize_data()
 
 if __name__ == '__main__':
     # Loading in Environment variables
     MAILING_LIST_URL = os.getenv('MAILING_LIST_URL')
     OUTPUT_FILE = os.getenv('OUTPUT_FILE')
+    CATEGORIZE_FILE = os.getenv('CATEGORIZE_FILE')
     USER_AGENT = os.getenv('USER_AGENT')
+
     main()
     
