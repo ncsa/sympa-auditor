@@ -19,18 +19,20 @@ It is best to run the sympa-auditor using docker compose with two services: symp
 
 #### Command
 ```
-python3 audit.json --sympa-session <TOKEN>
-python3 audit.json --sympa-session <TOKEN> --categorize
+python3 audit.json --sympa-session <TOKEN>               # Data is saved to ENV_FILE
+python3 audit.json --sympa-session <TOKEN> --output      # Dumps output to console. Default is save output to ENV_FILE
+python3 audit.json --sympa-session <TOKEN> --categorize  # Two files are created: OUTPUT_FILE and CATEGORIZE_FILE
+
 ```
 
 #### Output
-The output is a file. The user can either mount a docker volume (as shown in the docker-compose.yml file), or do a bind mount to save the file. 
+The output is a file (OUTPUT_FILE). The user can either mount a docker volume (as shown in the docker-compose.yml file), or do a bind mount to save the file. If the `--output` flag is included, the output is dumped to the console, rather than OUTPUT_FILE. If the `--categorize` flag is included, then the CATEGORIZE_FILE is created where each configuration and their selections are categorized and each mailing list are indexed to their respective configurations.
 
 #### Environment Variables 
 1. MAILING_LIST_URL='https://lists.ncsa.illinois.edu'
 2. ENV OUTPUT_FILE='audit.json' 
 - Contains mailing list entries and their configurations
-2. ENV OUTPUT_FILE='categorize_audit.json' 
+2. ENV CATEGORIZE_FILE='categorize_audit.json' 
 - Categorize mailing lists by their configurations. 
 3. ENV USER_AGENT='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
 

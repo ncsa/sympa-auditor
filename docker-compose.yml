@@ -1,6 +1,6 @@
 services:
   sympa_auditor:
-    image: phongtran27/sympa-auditor:0.0.3
+    image: phongtran27/sympa-auditor:0.0.4
     command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN> --categorize"
     depends_on:
       - selenium

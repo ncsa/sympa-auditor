@@ -152,13 +152,20 @@ def get_list_metadata(driver, list_name):
     )
     return list_info
 
-def dump_list_metadata(all_list_metadata):
+def dump_to_file(all_list_metadata):
     data = dict()
     for list_entry in all_list_metadata:
         data[list_entry.list_name] = asdict(list_entry)
 
     with open(OUTPUT_FILE, "w") as f:
         json.dump(data, f, indent=2)
+
+def dump_to_console(all_list_metadata):
+    data = dict()
+    for list_entry in all_list_metadata:
+        data[list_entry.list_name] = asdict(list_entry)
+    output = json.dumps(data)
+    print(output)
 
 def categorize_data():
 
@@ -177,8 +184,9 @@ def categorize_data():
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Get symmpa_session")
-    parser.add_argument("--sympa_session", type=str, default='', help="sympa_session cookie for logged in session. Outputs a file with list names and their configurations")
-    parser.add_argument("--categorize", action='store_true', help="Structure list items by their options. Ouputs a file categorize by configurations")
+    parser.add_argument("-s", "--sympa_session", type=str, default='', help="sympa_session cookie for logged in session. Outputs a file with list names and their configurations")
+    parser.add_argument("-o", "--console", action='store_true', help="Dump list metatdata to console")
+    parser.add_argument("-c", "--categorize", action='store_true', help="Structure list items by their options. Ouputs a file categorize by configurations")
     args = parser.parse_args()
     return args
 
@@ -195,9 +203,11 @@ def main():
     for list_name in all_lists:
         all_list_metadata.append(get_list_metadata(driver, list_name))  
 
-
-    # Dumps data to json file
-    dump_list_metadata(all_list_metadata)
+    # Dumps data
+    if args.console:
+        dump_to_console(all_list_metadata)
+    else:
+        dump_to_file(all_list_metadata)
 
     driver.quit()
 
