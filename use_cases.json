@@ -1,0 +1,42 @@
+{
+	"use_case_one": {
+		"info": "private",
+		"subscribe": "owner",
+		"add": "owner",
+		"unsubscribe": "open_notify",
+		"delete": "something",
+		"invite": "private",
+		"remind": "listmaster",
+		"review": "intranet"
+	},
+	"use_case_two": {
+		"info": "owner",
+		"subscribe": "owner",
+		"add": "owner",
+		"unsubscribe": "open_notify",
+		"delete": "something",
+		"invite": "private",
+		"remind": "listmaster",
+		"review": "intranet"
+	},
+	"use_case_three": {
+		"info": "owner",
+		"subscribe": "open",
+		"add": "owner",
+		"unsubscribe": "open_notify",
+		"delete": "something",
+		"invite": "private",
+		"remind": "listmaster",
+		"review": "closed"
+	},
+	"use_case_four": {
+		"info": "open", 
+		"subscribe": "owner",  
+		"add": "owner",
+		"unsubscribe": "open_notify",  
+		"delete": "owner",  
+		"invite": "private",  
+		"remind": "owner",  
+		"review": "private"
+	}
+}
