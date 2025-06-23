@@ -1,0 +1,48 @@
+---
+list_definition:
+  endpoint: [/lists/edit_list_request/, /description]
+  ids: [param.visibility]
+sending_receiving_setup: 
+    endpoint: [/lists/edit_list_request/, /sending]
+    ids: [param.send, param.reject_mail_from_automates_feature]
+privileges: 
+  endpoint: [/lists/edit_list_request/, /command]
+  ids: [
+      param.info, 
+      param.add,
+      param.subscribe,
+      param.unsubscribe,
+      param.del,
+      param.invite,
+      param.remind,
+      param.review,
+      param.owner_domain, 
+      param.owner_domain_min
+  ]
+archives: 
+  endpoint: [/lists/edit_list_request/, /archives]
+  ids: [
+      param.archive.web_access,
+      param.archive.mail_access,
+      param.archive.max_month,
+      param.web_archive_spam_protection
+  ]
+data_sources_setup: 
+  endpoint: [/lists/edit_list_request/, /data_source]
+  ids: [
+      param.owner_include.0.source,
+      param.editor_include.0.source,
+      param.include_remote_file.0.url,
+      param.include_ldap_2level_query.0.host,
+      param.ttl
+  ]
+miscellaneous: 
+  endpoint: [/lists/edit_list_request/, /other]
+  ids: [
+      param.loop_prevention_regex
+  ]
+allowed_sender_list: /lists/lca/allowlist/
+blocked_sender_list: /lists/blocklist/
+moderated_sender_list: /lists/lca/modlist/
+users_owners: [/lists/review/, /owner]
+users_editors: [/lists/review/, /editor]

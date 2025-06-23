@@ -1,23 +1,89 @@
 # audit.py
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-import pickle
 import time
-from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.by import By
-from dataclasses import dataclass, asdict
 import json
-from pathlib import Path
 import argparse
 import os
 from collections import defaultdict
+import ldap3
+import yaml
 
 # GLOBAL VARIABLES
 MAILING_LIST_URL = ''
 OUTPUT_FILE = ''
 USER_AGENT = '' 
 USE_CASE_PATH = ''
+WEB_UI_PAGES = None
+GROUP = 'all_ncsa_employe'
+LDAP_HOST = 'ldap1.ncsa.illinois.edu'
 
+def get_email_list_from_ldap(group_name, ldap_host):
+    """
+    Retrieves the email list of the members in group_name using ldap server
+    
+    Args:
+        group_name (str): The name of the specified group
+    
+    Returns:
+        A list of emails from the specified group_name using ldap server
+    """
+    # ldap_server = f"ldaps://ldap1.ncsa.illinois.edu"  # Replace with your LDAP server
+    ldap_server = f"ldaps://{ldap_host}"
+    ldap_user = None
+    ldap_password = None
+
+    search_base = 'dc=ncsa,dc=illinois,dc=edu'
+    
+    search_scope = ldap3.SUBTREE
+    attributes = ldap3.ALL_ATTRIBUTES
+
+    group_list = [
+        group_name
+    ]
+
+    with ldap3.Connection(ldap_server, ldap_user, ldap_password) as conn:
+        emails = set()
+        
+        if not conn.bind():
+            raise Exception("Error: Could not bind to LDAP server")
+        
+        for group_name in group_list:
+            search_filter = f"(cn={group_name})"
+            result = conn.search(search_base, search_filter, search_scope, attributes=attributes)
+            if not result:
+                raise KeyError(f"Error: Could not find group {group_name}")
+            else:
+                members = [ m.split(',')[0].split('=')[1] for m in conn.entries[0].uniqueMember ]
+
+        for member in members:    
+        
+            result = conn.search(search_base, f"(uid={member})", search_scope, attributes=attributes)
+            if not result:
+                raise KeyError(f"Error: Could not find member with uid {member}")
+            else:
+                emails.add(str(conn.entries[0].mail))
+                    
+        return emails
+
+def check_ncsa_affiliated(user_emails: list[str], ncsa_employee_emails: set[str]):
+    """
+    Check which users from user_emails are ncsa affiliated
+    
+    Args:
+        user_emails (list[str]): A list of user emails
+        ncsa_employee_emails (set[str]): A list of ncsa employees' emails. 
+    
+    Returns:
+        list[str]: A list of ncsa affilicated emails from user_emails
+    """
+    
+    res = []
+    for email in user_emails:
+        if email in ncsa_employee_emails:
+            res.append(email)
+    return res
+    
 def connect_with_session(sympa_session: str) -> webdriver.Remote:
     """
     Creates a selenium session with MAILING_LIST_URL using the sympa_session token.
@@ -90,58 +156,144 @@ def get_list_names(driver: webdriver.Remote) -> list[str]:
 
     return res
     
-def get_list_option(driver: webdriver.Remote, option: str) -> str:
+def get_select_option(driver: webdriver.Remote, list_name: str, page: str) -> dict[str:str]:
     """
-    Retrieves the specific selection for the given option (info, add, subscribe, unsubscribe, del, invite, remind, review).
-
-    Args:
-        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
-        option (str): info, add, subscribe, unsubscribe, del, invite, remind, review.
-
-    Returns:
-        str: The selected choice for the given option. 
-    """
-
-    selection = f"param.{option}"
-    select_element = driver.find_element(By.ID, selection)
-
-    select = Select(select_element)
-
-    # Get the currently selected option
-    selected_option = select.first_selected_option
-    return selected_option.get_attribute("value")
-
-def get_list_configuration(driver: webdriver.Remote, list_name: str) -> dict[str, str]:
-    """
-    Args:
-        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
-        list_name (str): The name of the mailing list (including domain ex. abc@lists.ncsa.illinois.edu).
-
-    Returns:
-        list_configuration (dict[str, str]): A list of configurations for the mailing list.
-    """
-
-    list_name = list_name.split('@')[0]
-    url = f"{MAILING_LIST_URL}/lists/edit_list_request/{list_name}/command"
-    driver.get(url)
-
-    time.sleep(1)
+    Given a specific page, retrieve the listed parameters in WEB_UI_PAGES. This function can only retrieve 
+    elements with an id that starts with param. 
     
-    list_configuration = {
-        "list_name": list_name,
-        "info": get_list_option(driver, 'info'),
-        "add": get_list_option(driver, 'add'),
-        "subscribe": get_list_option(driver, 'subscribe'),
-        "unsubscribe": get_list_option(driver, 'unsubscribe'),
-        "delete": get_list_option(driver, 'del'),
-        "invite": get_list_option(driver, 'invite'),
-        "remind": get_list_option(driver, 'remind'),
-        "review": get_list_option(driver, 'review'),
-    }
-    return list_configuration
+    Args:
+        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
+        list_name (str): The name of the mailing list (without the @lists.ncsa.illinois.edu)
+        page (str): The page's title on the webUI (list_definition, sending_receiving_setup, etc)
 
+    Returns:
+        dict[str:str]: A dictionary of the parameters and its values from page.
+    """
+    
+    configs = dict()
+    endpoint = WEB_UI_PAGES[page]["endpoint"]
+    ids = WEB_UI_PAGES[page]["ids"]
+    
+    url = f"{MAILING_LIST_URL}{endpoint[0]}{list_name}{endpoint[1]}"
+    driver.get(url)
+    
+    time.sleep(1)
+
+    for id in ids:
+        select_element = driver.find_element(By.ID, id)
+        res = select_element.get_attribute("value")
+        if len(res) == 0:
+            res = "default"
+        configs[id] = res
+    return configs
+
+def get_miscellaneous(driver: webdriver.Remote, list_name: str) -> dict[str:str]:
+    """
+    Retrieve the creator, creator_date, modifier, last_update, and status parameters in WEB_UI_PAGES for the miscellaneous page. 
+    
+    Args:
+        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
+        list_name (str): The name of the mailing list (without the @lists.ncsa.illinois.edu)
+        option (str): One of allowed_sender_list, blocked_sender_list, and moderated_sender_list
+
+    Returns:
+        dict[str:str]: A dictionary of the parameters and its values from the miscellaneous page.
+    """
+    
+    endpoint = WEB_UI_PAGES['miscellaneous']['endpoint']
+    url = f"{MAILING_LIST_URL}{endpoint[0]}{list_name}{endpoint[1]}"
+    driver.get(url)
+    
+    time.sleep(1)
+    res = dict()
+    
+    select_element = driver.find_element(By.ID, "item.creation")
+    text = select_element.text.split('\n')
+    res["creator"] = text[1]
+    res["creation_date"] = text[3]
+    
+    select_element = driver.find_element(By.ID, "item.update")
+    text = select_element.text.split('\n')
+    res["modifier"] = text[1]
+    res["last_update"] = text[3]
+    
+    select_element = driver.find_element(By.ID, "item.status")
+    res["status"] = select_element.text
+    
+    return res
+
+def get_sender_lists(driver: webdriver.Remote, list_name: str, option: str):
+    """
+    Retrieves the listed emails in Allowed Sender, Blocked Sender, or Moderated Sender list. 
+    
+    Args:
+        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
+        list_name (str): The name of the mailing list (without the @lists.ncsa.illinois.edu).
+        option (str): One of allowed_sender_list, blocked_sender_list, and moderated_sender_list.
+
+    Returns:
+        list[str]: A list of user emails
+    """
+    
+    endpoint = WEB_UI_PAGES[option]
+    url = f"{MAILING_LIST_URL}{endpoint}{list_name}"
+    driver.get(url)
+    time.sleep(1)
+    select_element = driver.find_element(By.TAG_NAME, "textarea")
+    return select_element.text.split('\n')
+
+def get_list_owners(driver: webdriver.Remote, list_name: str) -> list[str]:
+    """
+    Retrieves the emails of the owners of the mailing list.
+    
+    Args:
+        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
+        list_name (str): The name of the mailing list (without the @lists.ncsa.illinois.edu).
+
+    Returns:
+        list[str]: A list of owner user emails.
+    """
+    
+    # url = f"https://lists.ncsa.illinois.edu/lists/review/{list_name}/owner"
+    endpoint = WEB_UI_PAGES['users_owners']
+    url = f"{MAILING_LIST_URL}{endpoint[0]}{list_name}{endpoint[1]}"
+    
+    driver.get(url)
+    time.sleep(1)
+    select_element = driver.find_elements("xpath", "//*[starts-with(@id, 'item.owner.')]")
+    
+    owners = []
+    for entry in select_element[:len(select_element) - 1]:
+        user_entry = entry.text.split('\n')
+        owners.append(user_entry[0]) # Should be the email
+    return owners
+
+def get_list_editors(driver: webdriver.Remote, list_name: str) -> list[str]:
+    """
+    Retrieves the emails of the editors/moderators of the mailing list.
+    
+    Args:
+        driver (webdriver.Remote): The remote WebDriver instance from connecting to the running Selenium server. 
+        list_name (str): The name of the mailing list (without the @lists.ncsa.illinois.edu).
+
+    Returns:
+        list[str]: A list of moderators/editors user emails.
+    """
+    
+    # url = f"https://lists.ncsa.illinois.edu/lists/review/{list_name}/editor"
+    endpoint = WEB_UI_PAGES['users_editors']
+    url = f"{MAILING_LIST_URL}{endpoint[0]}{list_name}{endpoint[1]}"
+    
+    driver.get(url)
+    time.sleep(1)
+    editors = []
+    select_element = driver.find_elements("xpath", "//*[starts-with(@id, 'item.editor.')]")
+    for entry in select_element[:len(select_element) - 1]:
+        user_entry = entry.text.split('\n')
+        editors.append(user_entry[0]) # Should be the email
+    return editors
+        
 def get_non_use_case_matches(mailing_lists: list[dict[str:str]]) -> list[dict[str:str]]:
-
     """
     Finds the mailing lists that dont' match to any of the pre-defined use cases. 
 
@@ -178,38 +330,6 @@ def get_non_use_case_matches(mailing_lists: list[dict[str:str]]) -> list[dict[st
 
     return non_matches
 
-def dump_to_file(output: object) -> None:
-    if output is None:
-        raise ValueError("output cannot be None")
-
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2)
-
-def dump_to_console(output: object) -> None:
-    if output is None:
-        raise ValueError("output cannot be None")
-    print(json.dumps(output))
-
-def transform_mailing_lists_to_dict(mailing_lists: list[dict[str:str]]) -> dict[str:dict[str:str]]:
-    """
-    Transforms mailing_list into a dictionary with list_name as the key
-
-    Args:
-        mailing_lists (list[dict[str:str]]): A list of mailing list entries represented as dictionaries. 
-
-    Returns:
-        res (dict[str:dict[str:str]]): A dictionary of mailing list entries represented as dictionaries. 
-    """
-
-    if mailing_lists is None:
-        raise ValueError("mailing_lists cannot be None")
-
-    res = dict()
-    for mailing_list in mailing_lists:
-        list_name = mailing_list['list_name']
-        res[list_name] = mailing_list
-    return res
-
 def categorize_data(mailing_lists: list[dict[str:str]]) -> defaultdict[str:defaultdict[str:list[str]]]:
     """
     Categorize each mailing list into its respective selection for each option.
@@ -231,11 +351,22 @@ def categorize_data(mailing_lists: list[dict[str:str]]) -> defaultdict[str:defau
             res[option][selection].append(mailing_list['list_name'])
     return res
 
+def dump_to_file(output: object) -> None:
+    if output is None:
+        raise ValueError("output cannot be None")
+
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2)
+
+def dump_to_console(output: object) -> None:
+    if output is None:
+        raise ValueError("output cannot be None")
+    print(json.dumps(output))
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Get symmpa_session")
     parser.add_argument("-s", "--sympa_session", type=str, default='', help="sympa_session cookie for logged in session. Outputs a file with list names and their configurations")
     parser.add_argument("-c", "--console", action='store_true', help="Dump list metatdata to console")
-    parser.add_argument("-o", "--option", choices=["list", "categorize", "match"], required=True)
     args = parser.parse_args()
     return args
 
@@ -248,35 +379,63 @@ def main():
 
     # Get all lists
     list_names = get_list_names(driver)
-
-    # Get lists' metadata
-    mailing_lists = list()
+    
+    # Retrieve emails of ncsa employees
+    ncsa_employee_emails = get_email_list_from_ldap(GROUP, LDAP_HOST)
+    
+    # Contains mailing list entries
+    list_configs = dict()
+     
     for list_name in list_names:
-        mailing_lists.append(get_list_configuration(driver, list_name))  
-
+        list_name = list_name.split('@')[0]
+        list_configs[list_name] = dict()
+        for page in WEB_UI_PAGES:
+            if not isinstance(WEB_UI_PAGES[page], dict):
+                continue
+            list_configs[list_name][page] = get_select_option(driver, list_name, page)
+        
+        # Edit List Config -> Miscellaneous
+        list_configs[list_name]["miscellaneous"].update(get_miscellaneous(driver, list_name))
+        
+        list_configs[list_name]["sender_lists"] = dict()
+        
+        # Sender Lists -> Allowed Senders
+        list_configs[list_name]["sender_lists"]["allowed_sender"] = get_sender_lists(driver, list_name, "allowed_sender_list")
+        
+        # Sender Lists -> Blocked Senders
+        list_configs[list_name]["sender_lists"]["blocked_sender"] = get_sender_lists(driver, list_name, "blocked_sender_list")
+        
+        # Sender Lists -> Moderated Senders
+        list_configs[list_name]["sender_lists"]["moderated_sender"] = get_sender_lists(driver, list_name, "moderated_sender_list")
+        
+        # Users -> Owners
+        list_owners =  get_list_owners(driver, list_name)
+        list_configs[list_name]["owners"] = list_owners
+        list_configs[list_name]["ncsa_owners"] = check_ncsa_affiliated(list_owners, ncsa_employee_emails)
+        
+        # Users -> Editors
+        list_editors = get_list_editors(driver, list_name)
+        list_configs[list_name]["editors"] = list_editors
+        list_configs[list_name]["ncsa_editors"] = check_ncsa_affiliated(list_editors, ncsa_employee_emails)
+            
     # Ends the selenium session
     driver.quit()
-
-    output = None
-    if args.option == 'list':
-        output = transform_mailing_lists_to_dict(mailing_lists)
-    elif args.option == 'categorize':
-        output = categorize_data(mailing_lists)
-    elif args.option == 'match':
-        output = transform_mailing_lists_to_dict(get_non_use_case_matches(mailing_lists))
-
+    
     if args.console:
-        dump_to_console(output)
+        dump_to_console(list_configs)
     else:
-        dump_to_file(output)
+        dump_to_file(list_configs)
 
 if __name__ == '__main__':
     # Loading in Environment variables 
     MAILING_LIST_URL = os.getenv('MAILING_LIST_URL')
     OUTPUT_FILE = os.getenv('OUTPUT_FILE')
     USER_AGENT = os.getenv('USER_AGENT')
-    USE_CASE_PATH = os.getenv('USE_CASE_PATH')
+    CONFIG_PATH = os.getenv('CONFIG_PATH')
+    
+    # Read a YAML file and convert it to a Python dictionary
+    with open('config.yaml', 'r') as file:
+        WEB_UI_PAGES = yaml.safe_load(file)
 
+    print('start auditing')
     main()
-    
-    
