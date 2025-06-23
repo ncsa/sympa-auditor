@@ -1,17 +1,13 @@
 services:
   sympa_auditor:
     image: ghcr.io/ncsa/sympa-auditor:latest
-    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN> --option list"
-    # command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN> --option match"
-    # command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN> --option categorize"
+    command: /bin/sh -c "sleep 10 && python audit.py --sympa_session <TOKEN> --console"
     depends_on:
       - selenium
     volumes:
       - sympa_data:/sympa_data
-      - ./use_cases.json:/sympa_config/use_cases.json
     environment:
       OUTPUT_FILE: '/sympa_data/audit.json'
-      USE_CASE_PATH: '/sympa_config/use_cases.json'
 
   selenium:
     image: selenium/standalone-chrome
